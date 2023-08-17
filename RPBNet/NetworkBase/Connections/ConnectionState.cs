@@ -1,4 +1,4 @@
-﻿namespace GDCNetwork.NetworkBase.Connections
+﻿namespace RPBNet.NetworkBase.Connections
 {
     public enum ConnectionState
     {

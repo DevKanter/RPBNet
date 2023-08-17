@@ -1,8 +1,6 @@
-﻿using System.Text;
-using GDCNetwork.NetworkBase.Connections;
-using Utilities.Generics;
+﻿using RPBUtilities.common;
 
-namespace GDCNetwork.NetworkBase.Server
+namespace RPBNet.NetworkBase.Server
 {
     internal class PacketParser : Singleton<PacketParser>
     {

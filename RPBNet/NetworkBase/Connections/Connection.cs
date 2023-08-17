@@ -1,14 +1,14 @@
-﻿using System.Dynamic;
+﻿using System;
+using System.Collections.Generic;
 using System.Net.Sockets;
-using System.Timers;
-using RPBNet.NetworkBase;
-using SunPackets;
-using Utilities.Logging;
+using RPBUtilities.Logging;
+using static RPBNet.NetworkBase.RPBLoggerType;
+using static RPBUtilities.Logging.LogLevel;
 using Timer = System.Timers.Timer;
 
-namespace GDCNetwork.NetworkBase.Connections
+namespace RPBNet.NetworkBase.Connections
 {
-    public class Connection<T> : IDisposable
+    public class Connection<T> : IDisposable where T:class
     {
         public ConnectionState State { get; private set; }
         public byte[] Buffer { get; } = new byte[NetworkConst.BUFFER_SIZE];
@@ -16,14 +16,13 @@ namespace GDCNetwork.NetworkBase.Connections
         public Guid ID { get; }
         public T? User { get; private set; }
 
-        private readonly Timer _timer;
-        private readonly List<Action<Connection<T>>> _onCloseHandlers = new();
+        private readonly Timer _timer = new Timer(1000);
+        private readonly List<Action<Connection<T>>> _onCloseHandlers = new List<Action<Connection<T>>>();
 
         public Connection()
         {
             ID = Guid.NewGuid();
             State = ConnectionState.UNDEFINED;
-            _timer = new(1000);
             _timer.AutoReset = true;
             _timer.Elapsed += delegate { ConnectionCheck(); };
             _timer.Start();
@@ -54,7 +53,7 @@ namespace GDCNetwork.NetworkBase.Connections
             }
             catch (Exception)
             {
-                Logger.Instance.Log("Error sending data");
+                RPBLog.Log(COMMON_FILE, "Error sending data",ERROR);
             }
         }
 
@@ -70,7 +69,7 @@ namespace GDCNetwork.NetworkBase.Connections
             WorkSocket?.Shutdown(SocketShutdown.Both);
             WorkSocket?.Close();
             _timer.Stop();
-            Logger.Instance.Log($"Connection[{ID}] Closed!");
+            RPBLog.Log(COMMON_FILE, $"Connection[{ID}] Closed!",INFO);
             foreach (var onCloseHandler in _onCloseHandlers)
             {
                 onCloseHandler(this);

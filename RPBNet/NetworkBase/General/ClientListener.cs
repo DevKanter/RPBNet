@@ -3,13 +3,15 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using GDCNetwork.NetworkBase.Connections;
+using RPBNet.NetworkBase.Connections;
 using RPBUtilities;
 using static RPBNet.NetworkBase.NetworkConst;
+using static RPBNet.NetworkBase.RPBLoggerType;
+using static RPBUtilities.Logging.LogLevel;
 
-namespace GDCNetwork.NetworkBase.General
+namespace RPBNet.NetworkBase.General
 {
-    internal class ClientListener<T>
+    internal class ClientListener<T> where T:class
     {
 
         private readonly ManualResetEvent _allDone = new ManualResetEvent(false);
@@ -29,7 +31,7 @@ namespace GDCNetwork.NetworkBase.General
             // Bind the socket to the local endpoint and listen for incoming connections.  
             try
             {
-                IPEndPoint localEndPoint = new(IPAddress.Any, port);
+                var localEndPoint = new IPEndPoint(IPAddress.Any, port);
                
                 // Create a TCP/IP socket.  
                 var listener = new Socket(AddressFamily.InterNetwork,
@@ -47,8 +49,7 @@ namespace GDCNetwork.NetworkBase.General
             }
             catch (Exception e)
             {
-                Logger.Instance.Log("Connection closed unexpectedly!");
-                Logger.Instance.Log(e);
+                RPBLog.Log(COMMON_FILE,$"Connection closed unexpectedly!\n {e}",ERROR);
             }
 
         }
@@ -59,23 +60,22 @@ namespace GDCNetwork.NetworkBase.General
             // Get the socket that handles the client request.  
             var listener = (Socket?) ar.AsyncState;
             var handler = listener?.EndAccept(ar);
+            // Create the state object.  
+            var connection = new Connection<T>();
             try
             {
-
-                
-                // Create the state object.  
-                Connection<T> connection = new();
                 connection.WorkSocket = handler;
 
                 _onConnect(connection);
 
                 handler?.BeginReceive(connection.Buffer, 0, BUFFER_SIZE, 0,
-                    new(ReadCallback), connection);
+                    ReadCallback, connection);
 
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Logger.Instance.Log("Connection Closed!");
+                RPBLog.Log(COMMON_FILE, $"Connection[{connection}] Closed!", INFO);
+                RPBLog.Log(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
             }
 
         }
@@ -86,7 +86,7 @@ namespace GDCNetwork.NetworkBase.General
             var handler = connection?.WorkSocket;
             if (handler is null || connection is null)
             {
-                Logger.Instance.Log("Error in read callback, socket or connection was null!",LogType.ERROR);
+                RPBLog.Log(COMMON_FILE, "Error in read callback, socket or connection was null!",ERROR);
                 return;
             }
             try
@@ -104,13 +104,13 @@ namespace GDCNetwork.NetworkBase.General
                 _onReceive(b, connection);
 
                 handler.BeginReceive(connection.Buffer, 0, BUFFER_SIZE, 0,
-                    new(ReadCallback), connection);
+                    ReadCallback, connection);
 
 
             }
             catch (Exception e)
             {
-                //Logger.Instance.Log(e);
+                RPBLog.Log(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
             }
 
 
@@ -120,7 +120,7 @@ namespace GDCNetwork.NetworkBase.General
         {
            // Begin sending the data to the remote device.  
             handler.BeginSend(data, 0, data.Length, 0,
-                new(SendCallback), handler);
+                SendCallback, handler);
         }
 
         private void SendCallback(IAsyncResult ar)
@@ -135,7 +135,7 @@ namespace GDCNetwork.NetworkBase.General
             }
             catch (Exception)
             {
-                Logger.Instance.Log("Failed to send data!");
+                RPBLog.Log(COMMON_FILE, "Failed to send data!",ERROR);
             }
         }
 
