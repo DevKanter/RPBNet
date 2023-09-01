@@ -1,17 +1,31 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
-    <Nullable>enable</Nullable>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\RPBCommon\RPBCommon\RPBCommon.csproj" />
+    <ProjectReference Include="..\..\RPBCommon\RPBCommon\SMG1Common.csproj" />
+    <ProjectReference Include="..\..\RPBPacketBase\RPBPacketBase\RPBPacketBase.csproj" />
     <ProjectReference Include="..\..\RPBUtilities\RPBUtilities\RPBUtilities.csproj" />
+    <ProjectReference Include="..\..\RPBNetGenerator\RPBNetGenerator\RPBNetGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+   <PropertyGroup>
+       
+      <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+
+      <GeneratedFolder>Generated</GeneratedFolder>
+
+      <CompilerGeneratedFilesOutputPath>$(GeneratedFolder)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
+   </PropertyGroup>
+   <ItemGroup>
+      <!-- 👇 Exclude everything in the base folder -->
+      <Compile Remove="$(GeneratedFolder)/**/*.cs" />
+   </ItemGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /Y &quot;$(TargetDir)$(ProjectName).dll&quot; &quot;$(SolutionDir)output\$(ProjectName).dll&quot;" />
+    <Exec Command="copy /Y &quot;$(TargetDir)$(ProjectName).dll&quot; &quot;$(SolutionDir)output\$(ProjectName).dll&quot;&#xD;&#xA;copy /Y &quot;$(TargetDir)$(ProjectName).dll&quot; &quot;C:\Users\Alex\SMG1\Assets\include\$(ProjectName).dll&quot;" />
   </Target>
 
 </Project>

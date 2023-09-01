@@ -1,10 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using RPBNet.Crypt;
 using RPBNet.NetworkBase.Connections;
 using RPBUtilities;
+using RPBUtilities.Logging;
 using static RPBNet.NetworkBase.NetworkConst;
 using static RPBNet.NetworkBase.RPBLoggerType;
 using static RPBUtilities.Logging.LogLevel;
@@ -15,13 +21,15 @@ namespace RPBNet.NetworkBase.General
     {
 
         private readonly ManualResetEvent _allDone = new ManualResetEvent(false);
-        private readonly Action<Connection<T>> _onConnect;
+        private readonly Action<Connection<T>> _onEstablish;
         private readonly Action<ByteBuffer, Connection<T>> _onReceive;
+        private readonly Dictionary<Guid, Connection<T>> _activeConnections;
 
-        public ClientListener(int port, Action<Connection<T>> onConnect, Action<ByteBuffer, Connection<T>> onReceive)
+        public ClientListener(int port, Action<Connection<T>> onEstablish, Action<ByteBuffer, Connection<T>> onReceive)
         {
-            _onConnect = onConnect;
+            _onEstablish = onEstablish;
             _onReceive = onReceive;
+            _activeConnections = new Dictionary<Guid, Connection<T>>();
             Task.Factory.StartNew(() => StartListening(port));
         }
 
@@ -49,7 +57,7 @@ namespace RPBNet.NetworkBase.General
             }
             catch (Exception e)
             {
-                RPBLog.Log(COMMON_FILE,$"Connection closed unexpectedly!\n {e}",ERROR);
+                Log.Write(COMMON_FILE,$"Connection closed unexpectedly!\n {e}",ERROR);
             }
 
         }
@@ -58,15 +66,14 @@ namespace RPBNet.NetworkBase.General
         {
             _allDone.Set();
             // Get the socket that handles the client request.  
-            var listener = (Socket?) ar.AsyncState;
+            var listener = Unsafe.As<Socket>(ar.AsyncState);
             var handler = listener?.EndAccept(ar);
             // Create the state object.  
-            var connection = new Connection<T>();
+            var connection = new Connection<T>(handler,_onEstablish);
             try
             {
-                connection.WorkSocket = handler;
-
-                _onConnect(connection);
+                var packet = new S2CStartEncHandshake();
+                connection.Send(packet);
 
                 handler?.BeginReceive(connection.Buffer, 0, BUFFER_SIZE, 0,
                     ReadCallback, connection);
@@ -74,19 +81,20 @@ namespace RPBNet.NetworkBase.General
             }
             catch (Exception e)
             {
-                RPBLog.Log(COMMON_FILE, $"Connection[{connection}] Closed!", INFO);
-                RPBLog.Log(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
+                connection.Close();
+                Log.Write(COMMON_FILE, $"Connection[{connection}] Closed!", INFO);
+                Log.Write(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
             }
 
         }
 
         public void ReadCallback(IAsyncResult ar)
         {
-            var connection = ar.AsyncState as Connection<T>;
+            var connection = Unsafe.As<Connection<T>>(ar.AsyncState);
             var handler = connection?.WorkSocket;
             if (handler is null || connection is null)
             {
-                RPBLog.Log(COMMON_FILE, "Error in read callback, socket or connection was null!",ERROR);
+                Log.Write(COMMON_FILE, "Error in read callback, socket or connection was null!",ERROR);
                 return;
             }
             try
@@ -97,10 +105,8 @@ namespace RPBNet.NetworkBase.General
                 var bytesRead = handler.EndReceive(ar);
                 if (bytesRead <= 0) return;
 
-                var rec = new byte[bytesRead];
-                Buffer.BlockCopy(connection.Buffer, 0, rec, 0, bytesRead);
-                var b = new ByteBuffer(rec);
-                var size = b.Read<ushort>();
+                var b = new ByteBuffer(connection.Decrypt(bytesRead));
+                
                 _onReceive(b, connection);
 
                 handler.BeginReceive(connection.Buffer, 0, BUFFER_SIZE, 0,
@@ -110,35 +116,10 @@ namespace RPBNet.NetworkBase.General
             }
             catch (Exception e)
             {
-                RPBLog.Log(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
+                Log.Write(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
             }
 
 
         }
-
-        private void Send(Socket handler, byte[] data)
-        {
-           // Begin sending the data to the remote device.  
-            handler.BeginSend(data, 0, data.Length, 0,
-                SendCallback, handler);
-        }
-
-        private void SendCallback(IAsyncResult ar)
-        {
-            try
-            {
-                // Retrieve the socket from the state object.  
-                var handler = (Socket?)ar.AsyncState;
-
-                // Complete sending the data to the remote device.  
-                handler?.EndSend(ar);
-            }
-            catch (Exception)
-            {
-                RPBLog.Log(COMMON_FILE, "Failed to send data!",ERROR);
-            }
-        }
-
-
     }
 }

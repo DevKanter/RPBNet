@@ -1,59 +1,83 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using RPBCommon.Packet;
+using RPBNet.Crypt;
+using RPBUtilities;
+using RPBUtilities.Crypt;
 using RPBUtilities.Logging;
 using static RPBNet.NetworkBase.RPBLoggerType;
 using static RPBUtilities.Logging.LogLevel;
+using RPBPacketBase;
 using Timer = System.Timers.Timer;
 
 namespace RPBNet.NetworkBase.Connections
 {
-    public class Connection<T> : IDisposable where T:class
+    public class Connection<T> : IDisposable, IConnection where T:class
     {
         public ConnectionState State { get; private set; }
         public byte[] Buffer { get; } = new byte[NetworkConst.BUFFER_SIZE];
-        public Socket? WorkSocket { get; set; }= null;
+        public Socket WorkSocket { get; }
         public Guid ID { get; }
-        public T? User { get; private set; }
+        public T User { get; private set; }
 
-        private readonly Timer _timer = new Timer(1000);
+        private readonly RPBCrypter _crypter;
+        private readonly Action<Connection<T>> _onEstablish;
         private readonly List<Action<Connection<T>>> _onCloseHandlers = new List<Action<Connection<T>>>();
 
-        public Connection()
+        public Connection(Socket socket, Action<Connection<T>> onEstablish)
         {
             ID = Guid.NewGuid();
             State = ConnectionState.UNDEFINED;
-            _timer.AutoReset = true;
-            _timer.Elapsed += delegate { ConnectionCheck(); };
-            _timer.Start();
+            WorkSocket = socket;
+            _onEstablish = onEstablish;
+            _crypter = new RPBCrypter();
+        }
+        public void Send(RPBPacket packet)
+        {
+            Send(packet.GetData());
+        }
+        public void Send(byte[] data)
+        {
+            data = _crypter.Encrypt(data);
+            WorkSocket.BeginSend(data, 0, data.Length, 0, _sendCallback, WorkSocket);
+        }
+        
+
+        public byte[] Decrypt(int size)
+        {
+            return _crypter.Decrypt(Buffer, size);
+        }
+        public void OnEstablish()
+        {
+            _onEstablish(this);
         }
 
-        internal void Send(byte[] data)
+        public RPBCrypter GetCrypter()
         {
-            WorkSocket!.BeginSend(data, 0, data.Length, 0, SendCallback, WorkSocket);
+            return _crypter;
         }
-        public void Establish()
-        {
-            State = ConnectionState.ESTABLISHED;
-        }
+
         public void OnLogin(T user)
         {
             User = user;
             State = ConnectionState.LOGGED_IN;
         }
-        private void SendCallback(IAsyncResult ar)
+        private void _sendCallback(IAsyncResult ar)
         {
             try
             {
                 // Retrieve the socket from the state object.  
-                var handler = (Socket?) ar.AsyncState;
+                var handler = Unsafe.As<Socket>(ar.AsyncState);
 
                 // Complete sending the data to the remote device.  
                 handler?.EndSend(ar);
             }
             catch (Exception)
             {
-                RPBLog.Log(COMMON_FILE, "Error sending data",ERROR);
+                Log.Write(COMMON_FILE, "Error sending data",ERROR);
             }
         }
 
@@ -62,22 +86,19 @@ namespace RPBNet.NetworkBase.Connections
             _onCloseHandlers.Add(onCloseAction);
         }
 
-        private void ConnectionCheck()
+        public void Close()
         {
-            if (IsConnected()) return;
-
             WorkSocket?.Shutdown(SocketShutdown.Both);
             WorkSocket?.Close();
-            _timer.Stop();
-            RPBLog.Log(COMMON_FILE, $"Connection[{ID}] Closed!",INFO);
+            Log.Write(COMMON_FILE, $"Connection[{ID}] Closed!", INFO);
             foreach (var onCloseHandler in _onCloseHandlers)
             {
                 onCloseHandler(this);
-                Dispose();
             }
+            Dispose();
         }
 
-        private bool IsConnected()
+        public bool Poll()
         {
             try
             {
@@ -92,7 +113,6 @@ namespace RPBNet.NetworkBase.Connections
         public void Dispose()
         {
             WorkSocket?.Dispose();
-            _timer.Dispose();
         }
     }
 }
