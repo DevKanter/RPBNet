@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Reflection;
-using System.Text;
+﻿using System.Collections.Generic;
 using RPBNet.NetworkBase;
 using RPBNet.Packets;
 using RPBUtilities.Logging;
@@ -23,7 +20,7 @@ namespace RPBNet
     {
         public static void Initialize()
         {
-            Logger<RPBLoggerType>.Initialize(new Dictionary<RPBLoggerType, IRPBLogger>()
+            Logger<RPBLoggerType>.Initialize(new Dictionary<RPBLoggerType, IRPBLogger>
             {
                 {RPBLoggerType.COMMON_FILE, new FileLogger(RPBLoggerType.COMMON_FILE.ToString(), LogLevel.FULL)}
             });
@@ -31,7 +28,7 @@ namespace RPBNet
 
         public static void Write(RPBLoggerType type, string message, LogLevel level)
         {
-            Logger<RPBLoggerType>.Log(message,level,type);
+            Logger<RPBLoggerType>.Log(message, level, type);
         }
     }
 }

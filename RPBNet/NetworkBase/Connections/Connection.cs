@@ -2,30 +2,18 @@
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using RPBCommon.Packet;
 using RPBNet.Crypt;
-using RPBUtilities;
-using RPBUtilities.Crypt;
-using RPBUtilities.Logging;
+using RPBPacketBase;
 using static RPBNet.NetworkBase.RPBLoggerType;
 using static RPBUtilities.Logging.LogLevel;
-using RPBPacketBase;
-using Timer = System.Timers.Timer;
 
 namespace RPBNet.NetworkBase.Connections
 {
-    public class Connection<T> : IDisposable, IConnection where T:class
+    public class Connection<T> : IDisposable, IConnection where T : class
     {
-        public ConnectionState State { get; private set; }
-        public byte[] Buffer { get; } = new byte[NetworkConst.BUFFER_SIZE];
-        public Socket WorkSocket { get; }
-        public Guid ID { get; }
-        public T User { get; private set; }
-
         private readonly RPBCrypter _crypter;
-        private readonly Action<Connection<T>> _onEstablish;
         private readonly List<Action<Connection<T>>> _onCloseHandlers = new List<Action<Connection<T>>>();
+        private readonly Action<Connection<T>> _onEstablish;
 
         public Connection(Socket socket, Action<Connection<T>> onEstablish)
         {
@@ -35,21 +23,18 @@ namespace RPBNet.NetworkBase.Connections
             _onEstablish = onEstablish;
             _crypter = new RPBCrypter();
         }
+
+        public ConnectionState State { get; private set; }
+        public byte[] Buffer { get; } = new byte[NetworkConst.BUFFER_SIZE];
+        public Socket WorkSocket { get; }
+        public Guid ID { get; }
+        public T User { get; private set; }
+
         public void Send(RPBPacket packet)
         {
             Send(packet.GetData());
         }
-        public void Send(byte[] data)
-        {
-            data = _crypter.Encrypt(data);
-            WorkSocket.BeginSend(data, 0, data.Length, 0, _sendCallback, WorkSocket);
-        }
-        
 
-        public byte[] Decrypt(int size)
-        {
-            return _crypter.Decrypt(Buffer, size);
-        }
         public void OnEstablish()
         {
             _onEstablish(this);
@@ -60,11 +45,29 @@ namespace RPBNet.NetworkBase.Connections
             return _crypter;
         }
 
+        public void Dispose()
+        {
+            WorkSocket?.Dispose();
+        }
+
+        public void Send(byte[] data)
+        {
+            data = _crypter.Encrypt(data);
+            WorkSocket.BeginSend(data, 0, data.Length, 0, _sendCallback, WorkSocket);
+        }
+
+
+        public byte[] Decrypt(int size)
+        {
+            return _crypter.Decrypt(Buffer, size);
+        }
+
         public void OnLogin(T user)
         {
             User = user;
             State = ConnectionState.LOGGED_IN;
         }
+
         private void _sendCallback(IAsyncResult ar)
         {
             try
@@ -77,7 +80,7 @@ namespace RPBNet.NetworkBase.Connections
             }
             catch (Exception)
             {
-                Log.Write(COMMON_FILE, "Error sending data",ERROR);
+                Log.Write(COMMON_FILE, "Error sending data", ERROR);
             }
         }
 
@@ -91,10 +94,7 @@ namespace RPBNet.NetworkBase.Connections
             WorkSocket?.Shutdown(SocketShutdown.Both);
             WorkSocket?.Close();
             Log.Write(COMMON_FILE, $"Connection[{ID}] Closed!", INFO);
-            foreach (var onCloseHandler in _onCloseHandlers)
-            {
-                onCloseHandler(this);
-            }
+            foreach (var onCloseHandler in _onCloseHandlers) onCloseHandler(this);
             Dispose();
         }
 
@@ -108,11 +108,6 @@ namespace RPBNet.NetworkBase.Connections
             {
                 return false;
             }
-        }
-
-        public void Dispose()
-        {
-            WorkSocket?.Dispose();
         }
     }
 }

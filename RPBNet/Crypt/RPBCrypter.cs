@@ -1,16 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Net.Sockets;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Text;
-using RPBCommon.Packet;
-using RPBNet.NetworkBase;
-using RPBNet.NetworkBase.Client;
+using System.Xml.Serialization;
 using RPBNet.NetworkBase.Connections;
 using RPBUtilities.Crypt;
-using RPBUtilities.Logging;
-using static RPBNet.NetworkBase.NetworkConst;
 
 namespace RPBNet.Crypt
 {
@@ -28,16 +22,16 @@ namespace RPBNet.Crypt
             return _crypter.Encrypt(data);
         }
 
-        public byte[] Decrypt(byte[] buffer,int size)
+        public byte[] Decrypt(byte[] buffer, int size)
         {
-            return _crypter.Decrypt(buffer,size);
+            return _crypter.Decrypt(buffer, size);
         }
 
-        public void OnS2C_START_ENC_HANDSHAKE(S2CStartEncHandshake packet,IConnection connection)
+        public void OnS2C_START_ENC_HANDSHAKE(S2CStartEncHandshake packet, IConnection connection)
         {
             if (packet.Message != "THERE IS NO ENCRYPTION HERE!")
             {
-                var errorPacket = new C2SHandshakeFail() {ErrorCode = 0};
+                var errorPacket = new C2SHandshakeFail {ErrorCode = 0};
                 connection.Send(errorPacket);
                 return;
             }
@@ -50,13 +44,13 @@ namespace RPBNet.Crypt
         {
             if (packet.Message != "ARE YOU SURE???")
             {
-                var errorPacket = new S2CHandshakeFail() { ErrorCode = 0 };
+                var errorPacket = new S2CHandshakeFail {ErrorCode = 0};
                 connection.Send(errorPacket);
                 return;
             }
 
             var rsa = new RsaCryptor();
-            var answerPacket = new S2CShareRsa()
+            var answerPacket = new S2CShareRsa
             {
                 ServerRsaPublicKey = rsa.GetMyPublicKey()
             };
@@ -72,7 +66,7 @@ namespace RPBNet.Crypt
             var rsa = Unsafe.As<RsaCryptor>(_crypter);
             rsa.SetOtherPublicKey(packet.ServerRsaPublicKey);
 
-            var answerPacket = new C2SShareRsa()
+            var answerPacket = new C2SShareRsa
             {
                 ClientRsaPublicKey = rsa.GetMyPublicKey()
             };
@@ -95,10 +89,10 @@ namespace RPBNet.Crypt
 
         public void OnS2C_SHARE_AES(S2CShareAES packet, IConnection connection)
         {
-            var aes = new AesCryptor(packet.Key,packet.IV);
+            var aes = new AesCryptor(packet.Key, packet.IV);
             _crypter = aes;
 
-            var answerPacket = new C2SShareAESAns()
+            var answerPacket = new C2SShareAESAns
             {
                 Success = true
             };
@@ -108,19 +102,15 @@ namespace RPBNet.Crypt
 
         public void OnC2S_SHARE_AES_SUCCESS(C2SShareAESAns packet, IConnection connection)
         {
-            if (packet.Success)
-            {
-                connection.OnEstablish();
-            }
+            if (packet.Success) connection.OnEstablish();
         }
     }
-
 
 
     internal interface ICrypter
     {
         byte[] Encrypt(byte[] data);
-        byte[] Decrypt(byte[] buffer,int size);
+        byte[] Decrypt(byte[] buffer, int size);
     }
 
     internal class NoCrypter : ICrypter
@@ -133,7 +123,7 @@ namespace RPBNet.Crypt
         public byte[] Decrypt(byte[] buffer, int size)
         {
             var result = new byte[size];
-            Buffer.BlockCopy(buffer,0,result,0,size);
+            Buffer.BlockCopy(buffer, 0, result, 0, size);
             return result;
         }
     }
@@ -146,20 +136,13 @@ namespace RPBNet.Crypt
         {
             _aes = new AES();
         }
+
         public AesCryptor(byte[] key, byte[] iv)
         {
             _aes = new AES(key, iv);
         }
 
-        public S2CShareAES GetAesPacket()
-        {
-            return new S2CShareAES()
-            {
-                Key = _aes.Key,
-                IV = _aes.IV,
-            };
-        }
-        public byte[] Decrypt(byte[] buffer,int size)
+        public byte[] Decrypt(byte[] buffer, int size)
         {
             return _aes.Decrypt(buffer, size);
         }
@@ -168,12 +151,22 @@ namespace RPBNet.Crypt
         {
             return _aes.Encrypt(data);
         }
+
+        public S2CShareAES GetAesPacket()
+        {
+            return new S2CShareAES
+            {
+                Key = _aes.Key,
+                IV = _aes.IV
+            };
+        }
     }
 
     internal class RsaCryptor : ICrypter
     {
         private readonly RSA _myRSA;
         private readonly RSA _otherRSA;
+
         public RsaCryptor()
         {
             _myRSA = RSA.Create();
@@ -182,28 +175,6 @@ namespace RPBNet.Crypt
             _otherRSA.KeySize = 4096;
         }
 
-        public void SetOtherPublicKey(string publicKeyString)
-        {
-            var sr = new System.IO.StringReader(publicKeyString);
-            //we need a deserializer
-            var xs = new System.Xml.Serialization.XmlSerializer(typeof(RSAParameters));
-            //get the object back from the stream
-            var pubKey = (RSAParameters)xs.Deserialize(sr);
-            _otherRSA.ImportParameters(pubKey);
-        }
-
-        public string GetMyPublicKey()
-        {
-            var pubKey = _myRSA.ExportParameters(false);
-            //we need some buffer
-            var sw = new System.IO.StringWriter();
-            //we need a serializer
-            var xs = new System.Xml.Serialization.XmlSerializer(typeof(RSAParameters));
-            //serialize the key into the stream
-            xs.Serialize(sw, pubKey);
-            //get the string from the stream
-            return sw.ToString();
-        }
         public byte[] Encrypt(byte[] data)
         {
             return _otherRSA.Encrypt(data, RSAEncryptionPadding.Pkcs1);
@@ -215,6 +186,28 @@ namespace RPBNet.Crypt
             Buffer.BlockCopy(buffer, 0, bytes, 0, size);
             return _myRSA.Decrypt(bytes, RSAEncryptionPadding.Pkcs1);
         }
-    }
 
+        public void SetOtherPublicKey(string publicKeyString)
+        {
+            var sr = new StringReader(publicKeyString);
+            //we need a deserializer
+            var xs = new XmlSerializer(typeof(RSAParameters));
+            //get the object back from the stream
+            var pubKey = (RSAParameters) xs.Deserialize(sr);
+            _otherRSA.ImportParameters(pubKey);
+        }
+
+        public string GetMyPublicKey()
+        {
+            var pubKey = _myRSA.ExportParameters(false);
+            //we need some buffer
+            var sw = new StringWriter();
+            //we need a serializer
+            var xs = new XmlSerializer(typeof(RSAParameters));
+            //serialize the key into the stream
+            xs.Serialize(sw, pubKey);
+            //get the string from the stream
+            return sw.ToString();
+        }
+    }
 }

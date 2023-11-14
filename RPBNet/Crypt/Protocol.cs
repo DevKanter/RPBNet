@@ -1,14 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿
+
 // ReSharper disable InconsistentNaming
 
 namespace RPBNet.Crypt
 {
     internal enum CryptProtocol : byte
     {
-
-
         S2C_START_ENC_HANDSHAKE,
         C2S_READY_ENC_HANDSHAKE,
         S2C_SHARE_RSA,

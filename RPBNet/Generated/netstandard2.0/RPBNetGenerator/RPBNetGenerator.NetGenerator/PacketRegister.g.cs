@@ -2,6 +2,7 @@
 using RPBNet.NetworkBase.Server;
 using RPBCommon.Packet.Packets.Character;
 using SMG1Common.Packet.Packets.Connection;
+using C2SCharacterCreate = SMG1Common.Packet.Packets.Character.C2SCharacterCreate;
 
 namespace RPBNet.Packets
 {

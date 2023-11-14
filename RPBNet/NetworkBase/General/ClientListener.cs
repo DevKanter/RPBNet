@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -10,20 +8,19 @@ using System.Threading.Tasks;
 using RPBNet.Crypt;
 using RPBNet.NetworkBase.Connections;
 using RPBUtilities;
-using RPBUtilities.Logging;
 using static RPBNet.NetworkBase.NetworkConst;
 using static RPBNet.NetworkBase.RPBLoggerType;
 using static RPBUtilities.Logging.LogLevel;
 
 namespace RPBNet.NetworkBase.General
 {
-    internal class ClientListener<T> where T:class
+    internal class ClientListener<T> where T : class
     {
+        private readonly Dictionary<Guid, Connection<T>> _activeConnections;
 
         private readonly ManualResetEvent _allDone = new ManualResetEvent(false);
         private readonly Action<Connection<T>> _onEstablish;
         private readonly Action<ByteBuffer, Connection<T>> _onReceive;
-        private readonly Dictionary<Guid, Connection<T>> _activeConnections;
 
         public ClientListener(int port, Action<Connection<T>> onEstablish, Action<ByteBuffer, Connection<T>> onReceive)
         {
@@ -40,7 +37,7 @@ namespace RPBNet.NetworkBase.General
             try
             {
                 var localEndPoint = new IPEndPoint(IPAddress.Any, port);
-               
+
                 // Create a TCP/IP socket.  
                 var listener = new Socket(AddressFamily.InterNetwork,
                     SocketType.Stream, ProtocolType.Tcp);
@@ -50,16 +47,14 @@ namespace RPBNet.NetworkBase.General
                 while (true)
                 {
                     _allDone.Reset();
-                    listener.BeginAccept(AcceptCallback,listener);
+                    listener.BeginAccept(AcceptCallback, listener);
                     _allDone.WaitOne();
                 }
-               
             }
             catch (Exception e)
             {
-                Log.Write(COMMON_FILE,$"Connection closed unexpectedly!\n {e}",ERROR);
+                Log.Write(COMMON_FILE, $"Connection closed unexpectedly!\n {e}", ERROR);
             }
-
         }
 
         public void AcceptCallback(IAsyncResult ar)
@@ -69,7 +64,7 @@ namespace RPBNet.NetworkBase.General
             var listener = Unsafe.As<Socket>(ar.AsyncState);
             var handler = listener?.EndAccept(ar);
             // Create the state object.  
-            var connection = new Connection<T>(handler,_onEstablish);
+            var connection = new Connection<T>(handler, _onEstablish);
             try
             {
                 var packet = new S2CStartEncHandshake();
@@ -77,7 +72,6 @@ namespace RPBNet.NetworkBase.General
 
                 handler?.BeginReceive(connection.Buffer, 0, BUFFER_SIZE, 0,
                     ReadCallback, connection);
-
             }
             catch (Exception e)
             {
@@ -85,7 +79,6 @@ namespace RPBNet.NetworkBase.General
                 Log.Write(COMMON_FILE, $"Connection[{connection}] Closed!", INFO);
                 Log.Write(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
             }
-
         }
 
         public void ReadCallback(IAsyncResult ar)
@@ -94,11 +87,12 @@ namespace RPBNet.NetworkBase.General
             var handler = connection?.WorkSocket;
             if (handler is null || connection is null)
             {
-                Log.Write(COMMON_FILE, "Error in read callback, socket or connection was null!",ERROR);
+                Log.Write(COMMON_FILE, "Error in read callback, socket or connection was null!", ERROR);
                 return;
             }
+
             try
-            {            
+            {
                 // Retrieve the state object and the handler socket  
                 // from the asynchronous state object.  
 
@@ -106,20 +100,16 @@ namespace RPBNet.NetworkBase.General
                 if (bytesRead <= 0) return;
 
                 var b = new ByteBuffer(connection.Decrypt(bytesRead));
-                
+
                 _onReceive(b, connection);
 
                 handler.BeginReceive(connection.Buffer, 0, BUFFER_SIZE, 0,
                     ReadCallback, connection);
-
-
             }
             catch (Exception e)
             {
                 Log.Write(COMMON_FILE, e.Message, SYSTEM_MESSAGE);
             }
-
-
         }
     }
 }

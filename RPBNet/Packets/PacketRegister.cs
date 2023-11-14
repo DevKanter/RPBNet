@@ -29,24 +29,29 @@ namespace RPBNet.Packets
 
         private static void OnS2C_START_ENC_HANDSHAKE(S2CStartEncHandshake packet, IConnection connection)
         {
-            connection.GetCrypter().OnS2C_START_ENC_HANDSHAKE(packet,connection);
+            connection.GetCrypter().OnS2C_START_ENC_HANDSHAKE(packet, connection);
         }
+
         private static void OnC2S_READY_ENC_HANDSHAKE(C2SReadyEncHandshake packet, IConnection connection)
         {
             connection.GetCrypter().OnC2S_READY_ENC_HANDSHAKE(packet, connection);
         }
+
         private static void OnS2C_SHARE_RSA(S2CShareRsa packet, IConnection connection)
         {
             connection.GetCrypter().OnS2C_SHARE_RSA(packet, connection);
         }
+
         private static void OnC2S_SHARE_RSA(C2SShareRsa packet, IConnection connection)
         {
             connection.GetCrypter().OnC2S_SHARE_RSA(packet, connection);
         }
+
         private static void OnS2C_SHARE_AES(S2CShareAES packet, IConnection connection)
         {
             connection.GetCrypter().OnS2C_SHARE_AES(packet, connection);
         }
+
         private static void OnC2S_SHARE_AES_SUCCESS(C2SShareAESAns packet, IConnection connection)
         {
             connection.GetCrypter().OnC2S_SHARE_AES_SUCCESS(packet, connection);

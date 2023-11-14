@@ -1,5 +1,4 @@
-﻿using RPBCommon.Packet;
-using RPBNet.Crypt;
+﻿using RPBNet.Crypt;
 using RPBPacketBase;
 
 namespace RPBNet.NetworkBase.Connections
